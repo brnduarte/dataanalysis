@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import re
+from collections import Counter
 
 st.set_page_config(layout="wide")
 st.title("UX/UI Feedback Impact Dashboard")
@@ -37,11 +38,39 @@ def clean_html(text):
 def contains_ux_terms(text):
     return any(term in text for term in UX_TERMS)
 
+@st.cache_data
+def count_ux_term_frequency(texts):
+    all_text = " ".join(texts)
+    counts = Counter()
+    for term in UX_TERMS:
+        pattern = re.escape(term)
+        match_count = len(re.findall(pattern, all_text))
+        if match_count > 0:
+            counts[term] = match_count
+    return counts.most_common()
+
 try:
     uploaded_file = st.file_uploader("Upload the CSV file", type=["csv"])
 
     if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
+        sheets = pd.read_excel(uploaded_file, sheet_name=None) if uploaded_file.name.endswith(".xlsx") else {"Sheet1": pd.read_csv(uploaded_file)}
+
+        df = list(sheets.values())[0]
+
+        # Load second sheet if exists
+        customer_notes_df = sheets.get("Customer Notes")
+        if customer_notes_df is not None and "Feedback" in customer_notes_df.columns:
+            customer_notes_df["Feedback"] = customer_notes_df["Feedback"].apply(clean_html)
+            customer_notes_df["is_ux_related"] = customer_notes_df["Feedback"].apply(contains_ux_terms)
+            st.subheader("UX-Related Feedback from 'Customer Notes' Tab")
+            st.dataframe(customer_notes_df[customer_notes_df["is_ux_related"]])
+
+            # UX Term Frequency Chart
+            freq_data = count_ux_term_frequency(customer_notes_df[customer_notes_df["is_ux_related"]]["Feedback"])
+            if freq_data:
+                terms, freqs = zip(*freq_data)
+                fig_freq = px.bar(x=terms, y=freqs, labels={'x': 'UX Term', 'y': 'Frequency'}, title="Frequency of UX Terms in 'Customer Notes'")
+                st.plotly_chart(fig_freq, use_container_width=True)
 
         # Ensure required columns
         required_cols = {'Feedback', 'ARR', 'Churned', 'Customer', 'Source'}
