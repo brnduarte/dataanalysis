@@ -4,7 +4,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import re
 from collections import Counter
 
@@ -50,25 +49,19 @@ def count_ux_term_frequency(texts):
     return counts.most_common()
 
 try:
-    uploaded_file = st.file_uploader("Upload the CSV file", type=["csv"])
+    uploaded_main = st.file_uploader("Upload Main Dataset (CSV)", type=["csv"], key="main")
+    uploaded_notes = st.file_uploader("Upload Customer Notes (CSV)", type=["csv"], key="notes")
 
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
+    if uploaded_notes is not None:
+        customer_notes_df = pd.read_csv(uploaded_notes)
 
-        # Filter customer notes from second tab if present
-        customer_notes_df = None
-        try:
-            customer_notes_df = pd.read_csv(uploaded_file, skiprows=lambda x: x > 0 and x < 5)  # Placeholder logic
-        except:
-            pass
-
-        if customer_notes_df is not None and "Feedback" in customer_notes_df.columns:
+        if "Feedback" in customer_notes_df.columns:
             customer_notes_df["Feedback"] = customer_notes_df["Feedback"].apply(clean_html)
             customer_notes_df["is_ux_related"] = customer_notes_df["Feedback"].apply(contains_ux_terms)
 
             st.sidebar.markdown("---")
             st.sidebar.subheader("Customer Notes Filters")
-            ux_filter = st.sidebar.checkbox("Show only UX-related", value=True)
+            ux_filter = st.sidebar.checkbox("Show only UX-related notes", value=True)
 
             filtered_notes = customer_notes_df.copy()
             if ux_filter:
@@ -77,7 +70,6 @@ try:
             st.subheader("Filtered Feedback from 'Customer Notes'")
             st.dataframe(filtered_notes.reset_index(drop=True))
 
-            # UX Term Frequency Chart from Customer Notes
             freq_data = count_ux_term_frequency(filtered_notes["Feedback"])
             if freq_data:
                 terms, freqs = zip(*freq_data)
@@ -85,13 +77,13 @@ try:
                                   title="Frequency of UX Terms in 'Customer Notes'")
                 st.plotly_chart(fig_freq, use_container_width=True)
 
-        # Ensure required columns
+    if uploaded_main is not None:
+        df = pd.read_csv(uploaded_main)
         required_cols = {'Feedback', 'ARR', 'Churned', 'Customer', 'Source'}
         if required_cols.issubset(df.columns):
             df["Feedback"] = df["Feedback"].apply(clean_html)
             df["is_ux_related"] = df["Feedback"].apply(contains_ux_terms)
 
-            # Sidebar filters
             st.sidebar.header("Main Data Filters")
             churn_filter = st.sidebar.radio("Churned", options=["All", True, False], index=0)
             source_filter = st.sidebar.multiselect("Feedback Source", options=df["Source"].unique(), default=list(df["Source"].unique()))
@@ -101,7 +93,6 @@ try:
                 filtered_df = filtered_df[filtered_df["Churned"] == churn_filter]
             filtered_df = filtered_df[filtered_df["Source"].isin(source_filter)]
 
-            # Deduplicate ARR by customer
             ux_churned = filtered_df[(filtered_df["Churned"] == True) & (filtered_df["is_ux_related"])]
             unique_ux_arr = ux_churned.drop_duplicates(subset=["Customer"])["ARR"].sum()
             churned_count = ux_churned["Customer"].nunique()
@@ -109,7 +100,6 @@ try:
             st.metric("Total ARR Lost from Churned UX/UI Customers", f"${unique_ux_arr:,.2f}")
             st.metric("Number of Churned Customers with UX/UI Feedback", churned_count)
 
-            # Bar Chart: Churned UX/UI vs Non-UX
             churned_data = filtered_df[filtered_df["Churned"] == True]
             churn_grouped = churned_data.groupby("is_ux_related")["Customer"].nunique().reset_index()
             churn_grouped["Label"] = churn_grouped["is_ux_related"].map({True: "UX/UI Related", False: "Other"})
@@ -117,12 +107,10 @@ try:
                          title="Churned Customers by Feedback Type")
             st.plotly_chart(fig1, use_container_width=True)
 
-            # ARR Lost Breakdown
             lost_arr_df = ux_churned.drop_duplicates(subset=["Customer"])[["Customer", "ARR", "Feedback", "Source"]]
             st.subheader("ARR Lost Details from UX/UI-Related Churned Customers")
             st.dataframe(lost_arr_df.reset_index(drop=True))
 
-            # All filtered data
             st.subheader("Filtered Feedback Data")
             st.dataframe(filtered_df.reset_index(drop=True))
 
