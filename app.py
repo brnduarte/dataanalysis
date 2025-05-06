@@ -50,26 +50,35 @@ def count_ux_term_frequency(texts):
     return counts.most_common()
 
 try:
-    uploaded_file = st.file_uploader("Upload the CSV file", type=["csv"])
+    uploaded_file = st.file_uploader("Upload the Excel file", type=["xlsx"])
 
     if uploaded_file is not None:
-        sheets = pd.read_excel(uploaded_file, sheet_name=None) if uploaded_file.name.endswith(".xlsx") else {"Sheet1": pd.read_csv(uploaded_file)}
-
+        sheets = pd.read_excel(uploaded_file, sheet_name=None)
         df = list(sheets.values())[0]
 
-        # Load second sheet if exists
+        # Process Customer Notes tab with filters and chart
         customer_notes_df = sheets.get("Customer Notes")
         if customer_notes_df is not None and "Feedback" in customer_notes_df.columns:
             customer_notes_df["Feedback"] = customer_notes_df["Feedback"].apply(clean_html)
             customer_notes_df["is_ux_related"] = customer_notes_df["Feedback"].apply(contains_ux_terms)
-            st.subheader("UX-Related Feedback from 'Customer Notes' Tab")
-            st.dataframe(customer_notes_df[customer_notes_df["is_ux_related"]])
 
-            # UX Term Frequency Chart
-            freq_data = count_ux_term_frequency(customer_notes_df[customer_notes_df["is_ux_related"]]["Feedback"])
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("Customer Notes Filters")
+            ux_filter = st.sidebar.checkbox("Show only UX-related", value=True)
+
+            filtered_notes = customer_notes_df.copy()
+            if ux_filter:
+                filtered_notes = filtered_notes[filtered_notes["is_ux_related"]]
+
+            st.subheader("Filtered Feedback from 'Customer Notes'")
+            st.dataframe(filtered_notes.reset_index(drop=True))
+
+            # UX Term Frequency Chart from Customer Notes
+            freq_data = count_ux_term_frequency(filtered_notes["Feedback"])
             if freq_data:
                 terms, freqs = zip(*freq_data)
-                fig_freq = px.bar(x=terms, y=freqs, labels={'x': 'UX Term', 'y': 'Frequency'}, title="Frequency of UX Terms in 'Customer Notes'")
+                fig_freq = px.bar(x=terms, y=freqs, labels={'x': 'UX Term', 'y': 'Frequency'},
+                                  title="Frequency of UX Terms in 'Customer Notes'")
                 st.plotly_chart(fig_freq, use_container_width=True)
 
         # Ensure required columns
@@ -79,7 +88,7 @@ try:
             df["is_ux_related"] = df["Feedback"].apply(contains_ux_terms)
 
             # Sidebar filters
-            st.sidebar.header("Filters")
+            st.sidebar.header("Main Data Filters")
             churn_filter = st.sidebar.radio("Churned", options=["All", True, False], index=0)
             source_filter = st.sidebar.multiselect("Feedback Source", options=df["Source"].unique(), default=list(df["Source"].unique()))
 
@@ -100,7 +109,8 @@ try:
             churned_data = filtered_df[filtered_df["Churned"] == True]
             churn_grouped = churned_data.groupby("is_ux_related")["Customer"].nunique().reset_index()
             churn_grouped["Label"] = churn_grouped["is_ux_related"].map({True: "UX/UI Related", False: "Other"})
-            fig1 = px.bar(churn_grouped, x="Label", y="Customer", labels={"Customer": "Churned Customers"}, title="Churned Customers by Feedback Type")
+            fig1 = px.bar(churn_grouped, x="Label", y="Customer", labels={"Customer": "Churned Customers"},
+                         title="Churned Customers by Feedback Type")
             st.plotly_chart(fig1, use_container_width=True)
 
             # ARR Lost Breakdown
@@ -113,7 +123,7 @@ try:
             st.dataframe(filtered_df.reset_index(drop=True))
 
         else:
-            st.error("CSV is missing required columns: Feedback, ARR, Churned, Customer, Source")
+            st.error("Main sheet is missing required columns: Feedback, ARR, Churned, Customer, Source")
 
 except Exception as e:
     st.error(f"An unexpected error occurred: {e}")
