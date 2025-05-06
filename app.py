@@ -53,11 +53,15 @@ try:
     uploaded_file = st.file_uploader("Upload the CSV file", type=["csv"])
 
     if uploaded_file is not None:
-        sheets = pd.read_excel(uploaded_file, sheet_name=None)
-        df = list(sheets.values())[0]
+        df = pd.read_csv(uploaded_file)
 
-        # Process Customer Notes tab with filters and chart
-        customer_notes_df = sheets.get("Customer Notes")
+        # Filter customer notes from second tab if present
+        customer_notes_df = None
+        try:
+            customer_notes_df = pd.read_csv(uploaded_file, skiprows=lambda x: x > 0 and x < 5)  # Placeholder logic
+        except:
+            pass
+
         if customer_notes_df is not None and "Feedback" in customer_notes_df.columns:
             customer_notes_df["Feedback"] = customer_notes_df["Feedback"].apply(clean_html)
             customer_notes_df["is_ux_related"] = customer_notes_df["Feedback"].apply(contains_ux_terms)
