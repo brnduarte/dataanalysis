@@ -50,7 +50,7 @@ def count_ux_term_frequency(texts):
     return counts.most_common()
 
 try:
-    uploaded_file = st.file_uploader("Upload the Excel file", type=["xlsx"])
+    uploaded_file = st.file_uploader("Upload the CSV file", type=["csv"])
 
     if uploaded_file is not None:
         sheets = pd.read_excel(uploaded_file, sheet_name=None)
